@@ -1,17 +1,17 @@
 #pragma once
 
-#include <functional>
-#include <string>
+#include <stdbool.h>
+#include <stddef.h>
 
-namespace firmware {
+#include "signal_bus.h"
 
-struct SignalBus;
+typedef bool (*LogicEvalFn)(const SignalBus *);
 
-struct LogicCondition {
-    std::string id;
-    std::string description;
-    std::function<bool(const SignalBus &)> predicate;
-    int priority{100}; // lower value = higher priority
-};
+typedef struct {
+    char id[32];
+    char description[96];
+    LogicEvalFn eval;
+    int priority;
+    char target_screen[32];
+} LogicRoute;
 
-} // namespace firmware

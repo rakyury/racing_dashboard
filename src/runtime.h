@@ -1,10 +1,8 @@
 #pragma once
 
-#include <map>
-#include <optional>
-#include <string>
-#include <utility>
-#include <vector>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include "alerts.h"
 #include "brightness_controller.h"
@@ -14,56 +12,40 @@
 #include "health_monitor.h"
 #include "logic.h"
 #include "math_engine.h"
-#include "screen.h"
 #include "signal_bus.h"
 
-namespace firmware {
+typedef struct {
+    char default_screen[32];
+    Screen screens[16];
+    size_t screen_count;
+    LogicRoute routes[32];
+    size_t route_count;
+    Alert alerts[32];
+    size_t alert_count;
+    MathChannel math[32];
+    size_t math_count;
+    StaleSignalRule health[16];
+    size_t health_count;
+} RuntimeProfile;
 
-struct RuntimeInputs {
-    std::map<std::string, double> numeric;
-    std::map<std::string, bool> digital;
-    double ambient_lux{0.0};
-    std::optional<double> brightness_override{};
-    ExternalVideoSource external_source{ExternalVideoSource::None};
-};
+typedef struct {
+    SignalBus bus;
+    DisplayManager display;
+    AlertManager alerts;
+    MathEngine math_engine;
+    HealthMonitor health_monitor;
+    BrightnessController brightness;
+    DataLogger logger;
+    ExternalInputManager external;
+} Runtime;
 
-struct RuntimeProfile {
-    std::string default_screen;
-    std::vector<Screen> screens;
-    std::vector<std::pair<LogicCondition, std::string>> routes;
-    std::vector<Alert> alerts;
-    std::vector<MathChannel> math_channels;
-    std::vector<StaleSignalRule> health_rules;
-};
+void runtime_init(Runtime *rt);
+void runtime_load_profile(Runtime *rt, const RuntimeProfile *profile);
+void runtime_ingest(Runtime *rt, const char *name, double value, uint64_t now_ms, bool is_digital);
+void runtime_set_brightness(Runtime *rt, double lux, bool has_manual, double manual_percent);
+void runtime_set_external(Runtime *rt, ExternalVideoSource source);
+void runtime_step(Runtime *rt, uint64_t now_ms);
 
-class Runtime {
-  public:
-    Runtime();
+void demo_touchgfx(Runtime *rt, uint64_t now_ms);
+void demo_lvgl(Runtime *rt, uint64_t now_ms);
 
-    void load_profile(const RuntimeProfile &profile);
-    void ingest(const RuntimeInputs &inputs);
-    void step();
-
-    DisplayManager &display() { return display_; }
-    AlertManager &alerts() { return alert_manager_; }
-    MathEngine &math() { return math_engine_; }
-    HealthMonitor &health() { return health_monitor_; }
-    BrightnessController &brightness_controller() { return brightness_controller_; }
-    DataLogger &logger() { return logger_; }
-    SignalBus &bus() { return bus_; }
-    ExternalInputManager &external_input() { return external_input_; }
-
-  private:
-    SignalBus bus_{};
-    DisplayManager display_{};
-    AlertManager alert_manager_{};
-    MathEngine math_engine_{};
-    HealthMonitor health_monitor_{};
-    BrightnessController brightness_controller_{};
-    DataLogger logger_;
-    ExternalInputManager external_input_{};
-};
-
-void demo_runtime();
-
-} // namespace firmware

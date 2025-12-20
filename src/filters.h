@@ -1,39 +1,36 @@
 #pragma once
 
-#include <cmath>
-#include <string>
+#include <math.h>
+#include <stdbool.h>
 
-namespace firmware {
+typedef struct {
+    const char *id;
+    double value;
+    double alpha;
+    double deadband;
+} FilteredInput;
 
-struct FilteredInput {
-    std::string id;
-    double value{0.0};
-    double alpha{0.2};
-    double deadband{0.0};
+static inline void filtered_input_update(FilteredInput *f, double raw) {
+    if (fabs(raw - f->value) < f->deadband) return;
+    f->value = f->alpha * raw + (1.0 - f->alpha) * f->value;
+}
 
-    void update(double raw) {
-        if (std::abs(raw - value) < deadband) return;
-        value = alpha * raw + (1.0 - alpha) * value;
+typedef struct {
+    const char *id;
+    bool state;
+    int stable_cycles;
+    int threshold_cycles;
+} DebouncedInput;
+
+static inline void debounced_input_update(DebouncedInput *d, bool raw) {
+    if (raw == d->state) {
+        d->stable_cycles = 0;
+        return;
     }
-};
-
-struct DebouncedInput {
-    std::string id;
-    bool state{false};
-    int stable_cycles{0};
-    int threshold_cycles{3};
-
-    void update(bool raw) {
-        if (raw == state) {
-            stable_cycles = 0;
-            return;
-        }
-        stable_cycles++;
-        if (stable_cycles >= threshold_cycles) {
-            state = raw;
-            stable_cycles = 0;
-        }
+    d->stable_cycles++;
+    if (d->stable_cycles >= d->threshold_cycles) {
+        d->state = raw;
+        d->stable_cycles = 0;
     }
-};
+}
 
-} // namespace firmware

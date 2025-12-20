@@ -1,27 +1,17 @@
 #pragma once
 
-#include <string>
+typedef enum {
+    EXTERNAL_NONE = 0,
+    EXTERNAL_HDMI = 1,
+    EXTERNAL_CARPLAY = 2,
+    EXTERNAL_ANDROID_AUTO = 3
+} ExternalVideoSource;
 
-namespace firmware {
+typedef struct {
+    ExternalVideoSource source;
+} ExternalInputManager;
 
-enum class ExternalVideoSource {
-    None,
-    HDMI,
-    CarPlay,
-    AndroidAuto,
-};
+void external_input_init(ExternalInputManager *mgr);
+void external_input_set_source(ExternalInputManager *mgr, ExternalVideoSource source);
+const char *external_input_label(ExternalVideoSource source);
 
-class ExternalInputManager {
-  public:
-    void set_source(ExternalVideoSource source);
-    ExternalVideoSource current() const;
-    void process_frame() const;
-    void negotiate_carplay_session();
-    void negotiate_android_auto_session();
-
-  private:
-    static std::string source_to_string(ExternalVideoSource source);
-    ExternalVideoSource source_{ExternalVideoSource::None};
-};
-
-} // namespace firmware

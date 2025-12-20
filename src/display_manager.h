@@ -1,36 +1,24 @@
 #pragma once
 
-#include <functional>
-#include <string>
-#include <vector>
+#include <stddef.h>
 
-#include "external_video.h"
 #include "logic.h"
 #include "screen.h"
+#include "signal_bus.h"
 
-namespace firmware {
+typedef struct {
+    Screen screens[16];
+    size_t screen_count;
+    LogicRoute routes[32];
+    size_t route_count;
+    char current[32];
+    ScreenRenderFn overlay;
+} DisplayManager;
 
-class DisplayManager {
-  public:
-    void register_screen(Screen screen);
-    void set_default_screen(const std::string &id);
-    void register_condition(const LogicCondition &condition, const std::string &target_screen_id);
-    void tick(const SignalBus &bus, const ExternalInputManager &external_input);
-    void set_overlay_widget(std::function<void(const SignalBus &)> widget);
+void display_manager_init(DisplayManager *mgr);
+void display_register_screen(DisplayManager *mgr, const Screen *screen);
+void display_set_default(DisplayManager *mgr, const char *screen_id);
+void display_register_route(DisplayManager *mgr, const LogicRoute *route);
+void display_set_overlay(DisplayManager *mgr, ScreenRenderFn overlay);
+void display_tick(DisplayManager *mgr, const SignalBus *bus);
 
-  private:
-    struct ConditionEntry {
-        LogicCondition condition;
-        std::string target_screen_id;
-    };
-
-    void switch_to(const std::string &screen_id, const SignalBus &bus);
-
-    std::vector<Screen> screens_{};
-    std::vector<ConditionEntry> conditions_{};
-    std::string current_screen_{};
-    std::string default_screen_id_{};
-    std::function<void(const SignalBus &)> overlay_widget_{};
-};
-
-} // namespace firmware

@@ -1,31 +1,25 @@
 #pragma once
 
-#include <chrono>
-#include <set>
-#include <string>
-#include <vector>
+#include <stddef.h>
+#include <stdint.h>
 
 #include "alerts.h"
 #include "data_logger.h"
 #include "signal_bus.h"
 
-namespace firmware {
+typedef struct {
+    char id[32];
+    char signal[32];
+    uint64_t max_age_ms;
+    AlertSeverity severity;
+} StaleSignalRule;
 
-struct StaleSignalRule {
-    std::string id;
-    std::string signal_name;
-    std::chrono::milliseconds max_age{500};
-    AlertSeverity severity{AlertSeverity::Warning};
-};
+typedef struct {
+    StaleSignalRule rules[16];
+    size_t count;
+} HealthMonitor;
 
-class HealthMonitor {
-  public:
-    void register_rule(StaleSignalRule rule);
-    void evaluate(const SignalBus &bus, AlertManager &alerts, DataLogger &logger) const;
+void health_monitor_init(HealthMonitor *monitor);
+void health_monitor_register(HealthMonitor *monitor, const StaleSignalRule *rule);
+void health_monitor_evaluate(HealthMonitor *monitor, const SignalBus *bus, DataLogger *logger, AlertManager *alerts, uint64_t now_ms);
 
-  private:
-    std::vector<StaleSignalRule> rules_{};
-    mutable std::set<std::string> issued_alerts_{};
-};
-
-} // namespace firmware

@@ -1,35 +1,33 @@
 #pragma once
 
-#include <set>
-#include <string>
-#include <vector>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-namespace firmware {
+#include "signal_bus.h"
 
-struct SignalBus;
+typedef enum {
+    ALERT_INFO = 0,
+    ALERT_WARNING = 1,
+    ALERT_CRITICAL = 2
+} AlertSeverity;
 
-enum class AlertSeverity { Info, Warning, Critical };
-
-struct Alert {
-    std::string id;
-    std::string message;
-    std::string channel;
+typedef struct {
+    char id[32];
+    char message[96];
+    char signal[32];
     double threshold;
-    AlertSeverity severity{AlertSeverity::Warning};
-    bool latch_until_ack{true};
-};
+    AlertSeverity severity;
+    bool greater_than;
+    bool active;
+} Alert;
 
-class AlertManager {
-  public:
-    void register_alert(Alert alert);
-    void evaluate(const SignalBus &bus);
-    void acknowledge(const std::string &alert_id);
+typedef struct {
+    Alert alerts[32];
+    size_t count;
+} AlertManager;
 
-  private:
-    static std::string severity_to_string(AlertSeverity sev);
+void alert_manager_init(AlertManager *mgr);
+void alert_manager_register(AlertManager *mgr, const Alert *alert);
+void alert_manager_evaluate(AlertManager *mgr, const SignalBus *bus);
 
-    std::vector<Alert> alerts_{};
-    std::set<std::string> active_alerts_{};
-};
-
-} // namespace firmware

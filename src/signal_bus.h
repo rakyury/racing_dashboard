@@ -1,32 +1,46 @@
 #pragma once
 
-#include <chrono>
-#include <map>
-#include <optional>
-#include <string>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-namespace firmware {
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-struct SignalBus {
-    struct TimedNumeric {
-        double value{0.0};
-        std::chrono::steady_clock::time_point timestamp;
-    };
+#define MAX_NUMERIC_SIGNALS 64
+#define MAX_DIGITAL_SIGNALS 32
 
-    struct TimedDigital {
-        bool value{false};
-        std::chrono::steady_clock::time_point timestamp;
-    };
+typedef struct {
+    char name[32];
+    double value;
+    uint64_t timestamp_ms;
+    bool has_value;
+} NumericSignal;
 
-    std::map<std::string, TimedNumeric> numeric_signals;
-    std::map<std::string, TimedDigital> digital_signals;
+typedef struct {
+    char name[32];
+    bool value;
+    uint64_t timestamp_ms;
+    bool has_value;
+} DigitalSignal;
 
-    void set_numeric(const std::string &name, double value);
-    void set_digital(const std::string &name, bool value);
+typedef struct {
+    NumericSignal numeric[MAX_NUMERIC_SIGNALS];
+    DigitalSignal digital[MAX_DIGITAL_SIGNALS];
+    size_t numeric_count;
+    size_t digital_count;
+} SignalBus;
 
-    std::optional<double> get_numeric(const std::string &name) const;
-    bool get_digital(const std::string &name) const;
-    bool is_stale_numeric(const std::string &name, std::chrono::milliseconds max_age) const;
-};
+void signal_bus_init(SignalBus *bus);
+void signal_bus_set_numeric(SignalBus *bus, const char *name, double value, uint64_t now_ms);
+void signal_bus_set_digital(SignalBus *bus, const char *name, bool value, uint64_t now_ms);
+bool signal_bus_get_numeric(const SignalBus *bus, const char *name, double *out_value);
+bool signal_bus_get_digital(const SignalBus *bus, const char *name, bool *out_value);
+uint64_t signal_bus_timestamp_numeric(const SignalBus *bus, const char *name);
+uint64_t signal_bus_timestamp_digital(const SignalBus *bus, const char *name);
 
-} // namespace firmware
+#ifdef __cplusplus
+}
+#endif
+

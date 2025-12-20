@@ -1,16 +1,12 @@
 #pragma once
 
-#include <functional>
-#include <string>
+#include "signal_bus.h"
 
-namespace firmware {
+typedef void (*ScreenRenderFn)(const SignalBus *);
 
-struct SignalBus;
+typedef struct {
+    char id[32];
+    char title[64];
+    ScreenRenderFn render;
+} Screen;
 
-struct Screen {
-    std::string id;
-    std::string title;
-    std::function<void(const SignalBus &)> render;
-};
-
-} // namespace firmware

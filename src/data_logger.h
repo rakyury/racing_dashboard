@@ -1,25 +1,16 @@
 #pragma once
 
-#include <chrono>
-#include <deque>
-#include <string>
+#include <stddef.h>
 
-namespace firmware {
+#define LOGGER_LINES 256
+#define LOGGER_LINE_LEN 128
 
-struct LogEntry {
-    std::chrono::steady_clock::time_point timestamp;
-    std::string message;
-};
+typedef struct {
+    char lines[LOGGER_LINES][LOGGER_LINE_LEN];
+    size_t count;
+} DataLogger;
 
-class DataLogger {
-  public:
-    explicit DataLogger(size_t max_entries = 256);
-    void record(std::string msg);
-    void flush() const;
+void data_logger_init(DataLogger *logger);
+void data_logger_record(DataLogger *logger, const char *text);
+void data_logger_flush(const DataLogger *logger);
 
-  private:
-    size_t max_entries_;
-    std::deque<LogEntry> entries_{};
-};
-
-} // namespace firmware
