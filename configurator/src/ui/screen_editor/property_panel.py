@@ -8,18 +8,118 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QScrollArea, QLineEdit, QSpinBox, QDoubleSpinBox,
     QCheckBox, QComboBox, QPushButton, QColorDialog,
-    QFormLayout, QGroupBox, QSizePolicy
+    QFormLayout, QGroupBox, QSizePolicy, QMenu
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QAction
 
 from models.widget_types import (
     WidgetType, WidgetProperty, WidgetDefinition,
     get_widget_definition
 )
 from models.screen_layout import WidgetConfig
+from models.channel_types import (
+    get_all_predefined_channels, get_channels_by_category,
+    get_channel_by_id, ChannelDefinition
+)
 
 logger = logging.getLogger(__name__)
+
+
+class ChannelSelector(QWidget):
+    """Widget for selecting a data channel."""
+
+    channel_changed = pyqtSignal(int)  # channel_id
+
+    def __init__(self, channel_id: int = 0, parent=None):
+        super().__init__(parent)
+        self._channel_id = channel_id
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        # Channel display button
+        self._btn = QPushButton()
+        self._btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3d3d3d;
+                border: 1px solid #555;
+                border-radius: 3px;
+                padding: 4px 8px;
+                color: #ddd;
+                text-align: left;
+            }
+            QPushButton:hover {
+                border-color: #0078d4;
+            }
+            QPushButton::menu-indicator {
+                subcontrol-position: right center;
+                subcontrol-origin: padding;
+                right: 5px;
+            }
+        """)
+        self._btn.clicked.connect(self._show_menu)
+        layout.addWidget(self._btn)
+
+        # Build menu
+        self._menu = QMenu(self)
+        self._build_menu()
+
+        self._update_display()
+
+    def _build_menu(self) -> None:
+        """Build channel selection menu."""
+        self._menu.clear()
+
+        # Add "None" option
+        none_action = self._menu.addAction("(None)")
+        none_action.triggered.connect(lambda: self._select_channel(0))
+
+        self._menu.addSeparator()
+
+        # Add channels by category
+        channels_by_cat = get_channels_by_category()
+
+        for category, channels in channels_by_cat.items():
+            submenu = self._menu.addMenu(category)
+            for channel in channels:
+                action = submenu.addAction(f"{channel.name} ({channel.units})" if channel.units else channel.name)
+                action.setData(channel.id)
+                action.triggered.connect(lambda checked, ch=channel: self._select_channel(ch.id))
+
+    def _show_menu(self) -> None:
+        """Show the channel selection menu."""
+        self._menu.exec(self._btn.mapToGlobal(self._btn.rect().bottomLeft()))
+
+    def _select_channel(self, channel_id: int) -> None:
+        """Select a channel."""
+        self._channel_id = channel_id
+        self._update_display()
+        self.channel_changed.emit(channel_id)
+
+    def _update_display(self) -> None:
+        """Update button display."""
+        if self._channel_id == 0:
+            self._btn.setText("(None)")
+        else:
+            channel = get_channel_by_id(self._channel_id)
+            if channel:
+                text = f"{channel.name}"
+                if channel.units:
+                    text += f" [{channel.units}]"
+                self._btn.setText(text)
+            else:
+                self._btn.setText(f"Channel {self._channel_id}")
+
+    @property
+    def channel_id(self) -> int:
+        return self._channel_id
+
+    @channel_id.setter
+    def channel_id(self, value: int) -> None:
+        self._channel_id = value
+        self._update_display()
 
 
 class ColorButton(QPushButton):
@@ -314,11 +414,18 @@ class PropertyPanel(QWidget):
             return combo
 
         elif prop.property_type == "data_source":
-            # For now, simple text input for data source
-            edit = QLineEdit(str(current_value))
-            edit.setPlaceholderText("e.g., engine_rpm")
-            edit.textChanged.connect(lambda v, n=prop.name: self._on_widget_property_changed(n, v))
-            return edit
+            # Channel selector for data binding
+            channel_id = int(current_value) if current_value else 0
+            selector = ChannelSelector(channel_id)
+            selector.channel_changed.connect(lambda v, n=prop.name: self._on_widget_property_changed(n, v))
+            return selector
+
+        elif prop.property_type == "channel":
+            # Alias for data_source
+            channel_id = int(current_value) if current_value else 0
+            selector = ChannelSelector(channel_id)
+            selector.channel_changed.connect(lambda v, n=prop.name: self._on_widget_property_changed(n, v))
+            return selector
 
         return None
 
@@ -376,6 +483,8 @@ class PropertyPanel(QWidget):
                         widget.setCurrentText(str(value))
                     elif isinstance(widget, ColorButton):
                         widget.color = str(value)
+                    elif isinstance(widget, ChannelSelector):
+                        widget.channel_id = int(value) if value else 0
         finally:
             self._updating = False
 

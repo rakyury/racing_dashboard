@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "system": {
+    "brightness": 80,
+    "screen_timeout": 0,
+    "auto_brightness": false,
+    "default_screen": 0,
+    "use_metric": true,
+    "use_24h": true
+  },
+  "can1": {
+    "enabled": true,
+    "baudrate": 500000,
+    "fd_enabled": false
+  },
+  "can2": {
+    "enabled": false,
+    "baudrate": 500000,
+    "fd_enabled": false
+  },
+  "gps": {
+    "enabled": true,
+    "update_rate": 10,
+    "auto_track_detect": true
+  },
+  "logger": {
+    "enabled": true,
+    "log_rate": 10,
+    "auto_start": false,
+    "max_file_size_mb": 100
+  },
+  "wifi": {
+    "ap_enabled": true,
+    "ap_ssid": "RacingDashboard",
+    "ap_password": "",
+    "ap_channel": 6
+  },
+  "channels": [
+    {
+      "id": 100,
+      "name": "Engine RPM",
+      "units": "RPM",
+      "type": "can_rx",
+      "decimals": 0,
+      "can": {
+        "message_id": 864,
+        "start_bit": 0,
+        "bit_length": 16,
+        "byte_order": "big",
+        "scale": 1.0,
+        "offset": 0.0,
+        "timeout_ms": 500
+      }
+    },
+    {
+      "id": 101,
+      "name": "Vehicle Speed",
+      "units": "km/h",
+      "type": "can_rx",
+      "decimals": 0,
+      "can": {
+        "message_id": 864,
+        "start_bit": 16,
+        "bit_length": 16,
+        "byte_order": "big",
+        "scale": 0.1,
+        "offset": 0.0,
+        "timeout_ms": 500
+      }
+    },
+    {
+      "id": 102,
+      "name": "Throttle Position",
+      "units": "%",
+      "type": "can_rx",
+      "decimals": 1,
+      "can": {
+        "message_id": 865,
+        "start_bit": 0,
+        "bit_length": 8,
+        "byte_order": "big",
+        "scale": 0.5,
+        "offset": 0.0,
+        "timeout_ms": 500
+      }
+    },
+    {
+      "id": 103,
+      "name": "Coolant Temperature",
+      "units": "°C",
+      "type": "can_rx",
+      "decimals": 0,
+      "can": {
+        "message_id": 866,
+        "start_bit": 0,
+        "bit_length": 8,
+        "byte_order": "big",
+        "scale": 1.0,
+        "offset": -40.0,
+        "timeout_ms": 1000
+      }
+    },
+    {
+      "id": 104,
+      "name": "Oil Temperature",
+      "units": "°C",
+      "type": "analog",
+      "decimals": 0,
+      "analog": {
+        "input_type": "thermistor_ntc",
+        "channel": 2,
+        "thermistor_beta": 3950,
+        "thermistor_r25": 10000,
+        "thermistor_pullup": 2200,
+        "min_value": -40,
+        "max_value": 180,
+        "filter_alpha": 0.1
+      }
+    },
+    {
+      "id": 105,
+      "name": "Oil Pressure",
+      "units": "bar",
+      "type": "analog",
+      "decimals": 1,
+      "analog": {
+        "input_type": "voltage",
+        "channel": 0,
+        "scale": 2.5,
+        "offset": -1.25,
+        "min_value": 0,
+        "max_value": 10,
+        "filter_alpha": 0.2
+      }
+    }
+  ],
+  "screens": [
+    {
+      "id": 0,
+      "name": "Main Dashboard",
+      "bg_color": "0x000000",
+      "widgets": [
+        {
+          "type": "rpm_gauge",
+          "x": 200,
+          "y": 50,
+          "width": 400,
+          "height": 200,
+          "channel_id": 100,
+          "min_value": 0,
+          "max_value": 9000,
+          "warning_high": 7500,
+          "danger_high": 8500
+        },
+        {
+          "type": "speedometer",
+          "x": 50,
+          "y": 280,
+          "width": 200,
+          "height": 150,
+          "channel_id": 101,
+          "min_value": 0,
+          "max_value": 300
+        },
+        {
+          "type": "temp_gauge",
+          "x": 550,
+          "y": 280,
+          "width": 200,
+          "height": 150,
+          "channel_id": 103,
+          "min_value": 50,
+          "max_value": 130,
+          "warning_high": 105,
+          "danger_high": 115
+        },
+        {
+          "type": "lap_timer",
+          "x": 280,
+          "y": 300,
+          "width": 240,
+          "height": 130
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "Race Mode",
+      "bg_color": "0x000000",
+      "widgets": [
+        {
+          "type": "delta_display",
+          "x": 250,
+          "y": 50,
+          "width": 300,
+          "height": 100
+        },
+        {
+          "type": "lap_timer",
+          "x": 250,
+          "y": 170,
+          "width": 300,
+          "height": 80
+        },
+        {
+          "type": "sector_times",
+          "x": 50,
+          "y": 280,
+          "width": 700,
+          "height": 60
+        },
+        {
+          "type": "numeric_display",
+          "x": 50,
+          "y": 380,
+          "width": 150,
+          "height": 80,
+          "channel_id": 100,
+          "decimals": 0,
+          "show_units": true,
+          "show_label": true
+        },
+        {
+          "type": "g_meter",
+          "x": 550,
+          "y": 360,
+          "width": 120,
+          "height": 120
+        }
+      ]
+    }
+  ]
+}

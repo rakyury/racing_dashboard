@@ -15,7 +15,11 @@
       "Bash(pip install:*)",
       "Bash(python -m pip install:*)",
       "Bash(python src/main.py:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd Python Configurator with Visual Screen Editor\n\nFeatures:\n- PyQt6-based cross-platform desktop application\n- Visual drag-and-drop screen editor with 11 widget types\n- Binary protocol for device communication \\(USB Serial, WiFi, Emulator\\)\n- Configuration management with JSON import/export\n- Dark/Light theme support \\(Fluent Design inspired\\)\n\nComponents:\n- Screen Editor: Canvas, Widget Palette, Property Panel\n- Communication: Protocol, Serial/Emulator transports\n- Models: DashboardConfig, ScreenLayout, WidgetTypes\n- Controllers: DeviceController, TransportFactory\n\nCI/CD:\n- GitHub Actions workflow for firmware build\n- Cross-platform configurator testing \\(Linux, Windows, macOS\\)\n- PyInstaller executables build\n- Automatic release creation on tags\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(xargs ls:*)",
+      "Bash(python:*)"
     ]
   }
 }

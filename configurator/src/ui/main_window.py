@@ -21,6 +21,11 @@ from utils.theme import ThemeManager
 from models.config_manager import ConfigManager
 from controllers.device_controller import DeviceController
 from ui.screen_editor.screen_editor_widget import ScreenEditorWidget
+from ui.dialogs import DialogFactory, has_dialog, show_template_dialog
+from ui.dialogs.can_editor_dialog import show_can_editor
+from ui.dialogs.firmware_dialog import show_firmware_dialog
+from ui.widgets.monitor_panel import MonitorPanel
+from models.config_exporter import ConfigExporter, export_for_device
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,9 @@ class MainWindow(QMainWindow):
         self._config_manager.new_configuration()
         self._sync_screens_to_editor()
 
+        # Create dialog factory
+        self._dialog_factory = DialogFactory(self._config_manager.config, self)
+
     def _setup_window(self) -> None:
         """Setup main window properties."""
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
@@ -77,6 +85,13 @@ class MainWindow(QMainWindow):
         self.action_save_as = QAction("Save &As...", self)
         self.action_save_as.setShortcut(QKeySequence("Ctrl+Shift+S"))
         self.action_save_as.triggered.connect(self.save_configuration_as)
+
+        self.action_export_json = QAction("Export for &Device (JSON)...", self)
+        self.action_export_json.setShortcut(QKeySequence("Ctrl+E"))
+        self.action_export_json.triggered.connect(self.export_for_device_json)
+
+        self.action_export_binary = QAction("Export &Binary...", self)
+        self.action_export_binary.triggered.connect(self.export_for_device_binary)
 
         self.action_exit = QAction("E&xit", self)
         self.action_exit.setShortcut(QKeySequence.StandardKey.Quit)
@@ -110,9 +125,16 @@ class MainWindow(QMainWindow):
         self.action_connect_emulator = QAction("Connect &Emulator", self)
         self.action_connect_emulator.triggered.connect(self.connect_emulator)
 
+        self.action_firmware_upload = QAction("&Firmware Upload...", self)
+        self.action_firmware_upload.triggered.connect(self.show_firmware_dialog)
+
         # View actions
         self.action_toggle_theme = QAction("Toggle &Theme", self)
         self.action_toggle_theme.triggered.connect(self.toggle_theme)
+
+        # Tools actions
+        self.action_can_editor = QAction("&CAN Message Editor...", self)
+        self.action_can_editor.triggered.connect(self.show_can_editor)
 
         # Help actions
         self.action_about = QAction("&About", self)
@@ -130,6 +152,13 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.action_save)
         file_menu.addAction(self.action_save_as)
         file_menu.addSeparator()
+
+        # Export submenu
+        export_menu = file_menu.addMenu("&Export")
+        export_menu.addAction(self.action_export_json)
+        export_menu.addAction(self.action_export_binary)
+
+        file_menu.addSeparator()
         file_menu.addAction(self.action_exit)
 
         # Edit menu
@@ -145,33 +174,28 @@ class MainWindow(QMainWindow):
         device_menu.addAction(self.action_read_config)
         device_menu.addAction(self.action_write_config)
         device_menu.addSeparator()
+        device_menu.addAction(self.action_firmware_upload)
+        device_menu.addSeparator()
         device_menu.addAction(self.action_connect_emulator)
 
         # View menu
         view_menu = menubar.addMenu("&View")
         view_menu.addAction(self.action_toggle_theme)
 
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+        tools_menu.addAction(self.action_can_editor)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
         help_menu.addAction(self.action_about)
 
     def _create_toolbars(self) -> None:
-        """Create toolbars."""
-        # Main toolbar
-        main_toolbar = QToolBar("Main")
-        main_toolbar.setMovable(False)
-        main_toolbar.setIconSize(QSize(24, 24))
-        self.addToolBar(main_toolbar)
-
-        main_toolbar.addAction(self.action_new)
-        main_toolbar.addAction(self.action_open)
-        main_toolbar.addAction(self.action_save)
-        main_toolbar.addSeparator()
-        main_toolbar.addAction(self.action_connect)
-        main_toolbar.addAction(self.action_disconnect)
-        main_toolbar.addSeparator()
-        main_toolbar.addAction(self.action_read_config)
-        main_toolbar.addAction(self.action_write_config)
+        """Create toolbars - disabled to avoid duplication with screen editor toolbar."""
+        # Main toolbar removed - all controls are in screen editor toolbar
+        # File operations are accessible via File menu (Ctrl+N, Ctrl+O, Ctrl+S)
+        # Device operations are in Device menu
+        pass
 
     def _create_status_bar(self) -> None:
         """Create status bar."""
@@ -196,17 +220,12 @@ class MainWindow(QMainWindow):
         self._project_dock.setWidget(self._project_tree)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._project_dock)
 
-        # Properties Panel (right dock)
-        self._properties_dock = QDockWidget("Properties", self)
-        self._properties_dock.setMinimumWidth(DOCK_MIN_WIDTH)
-        self._properties_panel = self._create_properties_panel()
-        self._properties_dock.setWidget(self._properties_panel)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._properties_dock)
+        # Note: Properties panel is integrated into ScreenEditorWidget
 
         # Monitor Panel (bottom dock with tabs)
         self._monitor_dock = QDockWidget("Monitor", self)
-        self._monitor_tabs = self._create_monitor_tabs()
-        self._monitor_dock.setWidget(self._monitor_tabs)
+        self._monitor_panel = MonitorPanel()
+        self._monitor_dock.setWidget(self._monitor_panel)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self._monitor_dock)
 
     def _create_project_tree(self) -> QTreeWidget:
@@ -239,58 +258,6 @@ class MainWindow(QMainWindow):
 
         tree.itemClicked.connect(self._on_tree_item_clicked)
         return tree
-
-    def _create_properties_panel(self) -> QWidget:
-        """Create properties panel."""
-        panel = QFrame()
-        layout = QVBoxLayout(panel)
-
-        # Placeholder label
-        label = QLabel("Select an item to view properties")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("color: gray;")
-        layout.addWidget(label)
-        layout.addStretch()
-
-        return panel
-
-    def _create_monitor_tabs(self) -> QTabWidget:
-        """Create monitor tabs."""
-        tabs = QTabWidget()
-
-        # Telemetry tab
-        telemetry_widget = QWidget()
-        telemetry_layout = QVBoxLayout(telemetry_widget)
-        telemetry_label = QLabel("Connect to device to see telemetry")
-        telemetry_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        telemetry_layout.addWidget(telemetry_label)
-        tabs.addTab(telemetry_widget, "Telemetry")
-
-        # CAN Monitor tab
-        can_widget = QWidget()
-        can_layout = QVBoxLayout(can_widget)
-        can_label = QLabel("CAN bus monitor")
-        can_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        can_layout.addWidget(can_label)
-        tabs.addTab(can_widget, "CAN")
-
-        # GPS tab
-        gps_widget = QWidget()
-        gps_layout = QVBoxLayout(gps_widget)
-        gps_label = QLabel("GPS data")
-        gps_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        gps_layout.addWidget(gps_label)
-        tabs.addTab(gps_widget, "GPS")
-
-        # Logs tab
-        logs_widget = QWidget()
-        logs_layout = QVBoxLayout(logs_widget)
-        logs_label = QLabel("Device logs")
-        logs_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logs_layout.addWidget(logs_label)
-        tabs.addTab(logs_widget, "Logs")
-
-        return tabs
 
     def _create_central_widget(self) -> None:
         """Create central widget with screen editor."""
@@ -354,8 +321,20 @@ class MainWindow(QMainWindow):
 
     def _on_tree_item_clicked(self, item: QTreeWidgetItem, column: int) -> None:
         """Handle project tree item click."""
-        logger.debug(f"Tree item clicked: {item.text(0)}")
-        self.statusbar.showMessage(f"Selected: {item.text(0)}", 3000)
+        item_text = item.text(0)
+        logger.debug(f"Tree item clicked: {item_text}")
+
+        # Check if this item has an associated dialog
+        if has_dialog(item_text):
+            # Update dialog factory with current config
+            if self._config_manager.has_config:
+                self._dialog_factory.set_config(self._config_manager.config)
+                if self._dialog_factory.show_dialog_for_item(item_text):
+                    # Dialog was shown and may have modified settings
+                    self._config_manager.mark_modified()
+                    self._update_title()
+        else:
+            self.statusbar.showMessage(f"Selected: {item_text}", 3000)
 
     def _on_device_connected(self) -> None:
         """Handle device connected."""
@@ -365,6 +344,8 @@ class MainWindow(QMainWindow):
         self.action_connect.setEnabled(False)
         self.action_read_config.setEnabled(True)
         self.action_write_config.setEnabled(True)
+        self._monitor_panel.set_connected(True)
+        self._monitor_panel.add_log("info", "Device connected")
         self.statusbar.showMessage("Device connected", 3000)
 
     def _on_device_disconnected(self) -> None:
@@ -375,17 +356,26 @@ class MainWindow(QMainWindow):
         self.action_connect.setEnabled(True)
         self.action_read_config.setEnabled(False)
         self.action_write_config.setEnabled(False)
+        self._monitor_panel.set_connected(False)
+        self._monitor_panel.add_log("info", "Device disconnected")
         self.statusbar.showMessage("Device disconnected", 3000)
 
     def _on_device_error(self, message: str) -> None:
         """Handle device error."""
         logger.error(f"Device error: {message}")
+        self._monitor_panel.add_log("error", message)
         self.statusbar.showMessage(f"Error: {message}", 5000)
 
     def _on_telemetry_received(self, packet) -> None:
         """Handle telemetry data."""
-        # TODO: Update telemetry display
-        pass
+        # Update monitor panel with telemetry
+        if hasattr(packet, 'telemetry') and packet.telemetry:
+            self._monitor_panel.update_telemetry(packet.telemetry)
+        if hasattr(packet, 'can_messages') and packet.can_messages:
+            for msg in packet.can_messages:
+                self._monitor_panel.add_can_message(msg.id, msg.data)
+        if hasattr(packet, 'gps') and packet.gps:
+            self._monitor_panel.update_gps(packet.gps)
 
     def _on_config_changed(self) -> None:
         """Handle configuration change."""
@@ -409,9 +399,24 @@ class MainWindow(QMainWindow):
             elif reply == QMessageBox.StandardButton.Cancel:
                 return
 
-        self._config_manager.new_configuration()
-        self._sync_screens_to_editor()
-        self.statusbar.showMessage("New configuration created", 3000)
+        # Show template selection dialog
+        template = show_template_dialog(self)
+
+        if template:
+            # Create new config with template
+            self._config_manager.new_configuration()
+
+            # Apply template screens
+            if template.screens:
+                self._config_manager.config.screens = template.screens.copy()
+
+            self._sync_screens_to_editor()
+            self.statusbar.showMessage(f"Created from template: {template.name}", 3000)
+        else:
+            # User cancelled - create empty config
+            self._config_manager.new_configuration()
+            self._sync_screens_to_editor()
+            self.statusbar.showMessage("New configuration created", 3000)
 
     def open_configuration(self, file_path: str = None) -> None:
         """Open configuration file."""
@@ -460,6 +465,97 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to save:\n{e}")
 
         return False
+
+    def export_for_device_json(self) -> None:
+        """Export configuration as optimized JSON for device."""
+        if not self._config_manager.has_config:
+            QMessageBox.warning(self, "No Configuration", "No configuration to export")
+            return
+
+        # Sync screens from editor
+        self._sync_screens_from_editor()
+
+        # Validate first
+        exporter = ConfigExporter(self._config_manager.config)
+        is_valid, errors, warnings = exporter.validate()
+
+        # Show warnings if any
+        if warnings:
+            warning_msg = "Validation warnings:\n\n" + "\n".join(f"• {w}" for w in warnings)
+            QMessageBox.warning(self, "Validation Warnings", warning_msg)
+
+        if not is_valid:
+            error_msg = "Configuration has errors:\n\n" + "\n".join(f"• {e}" for e in errors)
+            QMessageBox.critical(self, "Validation Failed", error_msg)
+            return
+
+        # Ask for file path
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export for Device",
+            "dashboard_config.json",
+            "JSON Files (*.json);;All Files (*)"
+        )
+
+        if file_path:
+            result = exporter.export_json(file_path, compact=True)
+
+            if result.success:
+                QMessageBox.information(
+                    self, "Export Successful",
+                    f"Configuration exported successfully!\n\n"
+                    f"File: {result.file_path}\n"
+                    f"Size: {result.file_size} bytes\n"
+                    f"Checksum: {result.checksum[:16]}..."
+                )
+                self.statusbar.showMessage(f"Exported: {file_path}", 3000)
+            else:
+                error_msg = "Export failed:\n\n" + "\n".join(result.errors)
+                QMessageBox.critical(self, "Export Failed", error_msg)
+
+    def export_for_device_binary(self) -> None:
+        """Export configuration as binary format for device."""
+        if not self._config_manager.has_config:
+            QMessageBox.warning(self, "No Configuration", "No configuration to export")
+            return
+
+        # Sync screens from editor
+        self._sync_screens_from_editor()
+
+        # Validate first
+        exporter = ConfigExporter(self._config_manager.config)
+        is_valid, errors, warnings = exporter.validate()
+
+        if warnings:
+            warning_msg = "Validation warnings:\n\n" + "\n".join(f"• {w}" for w in warnings)
+            QMessageBox.warning(self, "Validation Warnings", warning_msg)
+
+        if not is_valid:
+            error_msg = "Configuration has errors:\n\n" + "\n".join(f"• {e}" for e in errors)
+            QMessageBox.critical(self, "Validation Failed", error_msg)
+            return
+
+        # Ask for file path
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Binary",
+            "dashboard_config.bin",
+            "Binary Files (*.bin);;All Files (*)"
+        )
+
+        if file_path:
+            result = exporter.export_binary(file_path)
+
+            if result.success:
+                QMessageBox.information(
+                    self, "Export Successful",
+                    f"Binary configuration exported!\n\n"
+                    f"File: {result.file_path}\n"
+                    f"Size: {result.file_size} bytes\n"
+                    f"CRC32: {result.checksum}"
+                )
+                self.statusbar.showMessage(f"Binary exported: {file_path}", 3000)
+            else:
+                error_msg = "Export failed:\n\n" + "\n".join(result.errors)
+                QMessageBox.critical(self, "Export Failed", error_msg)
 
     def show_connect_dialog(self) -> None:
         """Show device connection dialog."""
@@ -520,6 +616,27 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app:
             self._theme_manager.toggle_theme(app)
+
+    def show_can_editor(self) -> None:
+        """Show CAN message editor dialog."""
+        # Get current CAN database from config
+        can_db = None
+        if self._config_manager.has_config:
+            can_db = getattr(self._config_manager.config, 'can_database', None)
+
+        # Show editor
+        result = show_can_editor(can_db, self)
+
+        if result:
+            # Save updated database to config
+            if self._config_manager.has_config:
+                self._config_manager.config.can_database = result
+                self._config_manager.mark_modified()
+                self.statusbar.showMessage(f"CAN database updated: {len(result.messages)} messages", 3000)
+
+    def show_firmware_dialog(self) -> None:
+        """Show firmware upload dialog."""
+        show_firmware_dialog(self._device_controller, self)
 
     def show_about(self) -> None:
         """Show about dialog."""

@@ -15,6 +15,7 @@ from PyQt6.QtGui import QAction, QIcon
 from ui.screen_editor.canvas import ScreenCanvas
 from ui.screen_editor.widget_palette import WidgetPalette, CompactWidgetPalette
 from ui.screen_editor.property_panel import PropertyPanel
+from ui.screen_editor.preview_simulator import DataSimulator, SimulationMode
 from models.screen_layout import ScreenLayout, WidgetConfig, create_default_screen
 from models.widget_types import WidgetType, WidgetDefinition
 
@@ -44,8 +45,13 @@ class ScreenEditorWidget(QWidget):
         self._screens: List[ScreenLayout] = []
         self._current_screen_index = 0
 
+        # Preview simulator
+        self._simulator = DataSimulator(self)
+        self._preview_mode = False
+
         self._setup_ui()
         self._connect_signals()
+        self._simulator.data_updated.connect(self._on_simulator_data)
 
     def _setup_ui(self) -> None:
         """Setup the editor UI."""
@@ -167,8 +173,8 @@ class ScreenEditorWidget(QWidget):
         toolbar.addWidget(self._zoom_fit_btn)
 
         self._zoom_100_btn = QToolButton()
-        self._zoom_100_btn.setText("100%")
-        self._zoom_100_btn.setToolTip("Reset to 100%")
+        self._zoom_100_btn.setText("1:1")
+        self._zoom_100_btn.setToolTip("Reset to 100% (1:1)")
         self._zoom_100_btn.clicked.connect(self._canvas.zoom_100)
         toolbar.addWidget(self._zoom_100_btn)
 
@@ -209,6 +215,107 @@ class ScreenEditorWidget(QWidget):
 
         self._add_widget_btn.setMenu(self._add_widget_menu)
         toolbar.addWidget(self._add_widget_btn)
+
+        toolbar.addSeparator()
+
+        # Align button with dropdown menu
+        self._align_btn = QToolButton()
+        self._align_btn.setText("Align")
+        self._align_btn.setToolTip("Alignment and Layout Tools")
+        self._align_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._align_menu = QMenu()
+
+        # Alignment actions
+        align_left = self._align_menu.addAction("Align Left")
+        align_left.triggered.connect(self._canvas.align_left)
+        align_center_h = self._align_menu.addAction("Align Center (H)")
+        align_center_h.triggered.connect(self._canvas.align_center_h)
+        align_right = self._align_menu.addAction("Align Right")
+        align_right.triggered.connect(self._canvas.align_right)
+
+        self._align_menu.addSeparator()
+
+        align_top = self._align_menu.addAction("Align Top")
+        align_top.triggered.connect(self._canvas.align_top)
+        align_center_v = self._align_menu.addAction("Align Center (V)")
+        align_center_v.triggered.connect(self._canvas.align_center_v)
+        align_bottom = self._align_menu.addAction("Align Bottom")
+        align_bottom.triggered.connect(self._canvas.align_bottom)
+
+        self._align_menu.addSeparator()
+
+        dist_h = self._align_menu.addAction("Distribute Horizontal")
+        dist_h.triggered.connect(self._canvas.distribute_horizontal)
+        dist_v = self._align_menu.addAction("Distribute Vertical")
+        dist_v.triggered.connect(self._canvas.distribute_vertical)
+
+        self._align_menu.addSeparator()
+
+        match_w = self._align_menu.addAction("Match Width")
+        match_w.triggered.connect(self._canvas.match_width)
+        match_h = self._align_menu.addAction("Match Height")
+        match_h.triggered.connect(self._canvas.match_height)
+        match_s = self._align_menu.addAction("Match Size")
+        match_s.triggered.connect(self._canvas.match_size)
+
+        self._align_btn.setMenu(self._align_menu)
+        toolbar.addWidget(self._align_btn)
+
+        # Edit button with copy/paste
+        self._edit_btn = QToolButton()
+        self._edit_btn.setText("Edit")
+        self._edit_btn.setToolTip("Edit Operations")
+        self._edit_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._edit_menu = QMenu()
+
+        copy_action = self._edit_menu.addAction("Copy (Ctrl+C)")
+        copy_action.triggered.connect(self._canvas.copy_selected)
+        cut_action = self._edit_menu.addAction("Cut (Ctrl+X)")
+        cut_action.triggered.connect(self._canvas.cut_selected)
+        paste_action = self._edit_menu.addAction("Paste (Ctrl+V)")
+        paste_action.triggered.connect(self._canvas.paste)
+
+        self._edit_menu.addSeparator()
+
+        duplicate_action = self._edit_menu.addAction("Duplicate (Ctrl+D)")
+        duplicate_action.triggered.connect(self._canvas._duplicate_selected)
+
+        self._edit_menu.addSeparator()
+
+        select_all_action = self._edit_menu.addAction("Select All (Ctrl+A)")
+        select_all_action.triggered.connect(self._canvas.select_all)
+
+        self._edit_btn.setMenu(self._edit_menu)
+        toolbar.addWidget(self._edit_btn)
+
+        toolbar.addSeparator()
+
+        # Preview controls
+        toolbar.addWidget(QLabel("Preview:"))
+
+        self._preview_btn = QToolButton()
+        self._preview_btn.setText("▶ Play")
+        self._preview_btn.setToolTip("Start/Stop Preview Simulation")
+        self._preview_btn.setCheckable(True)
+        self._preview_btn.setStyleSheet("""
+            QToolButton:checked {
+                background-color: #228B22;
+                border-color: #228B22;
+            }
+        """)
+        self._preview_btn.toggled.connect(self._toggle_preview)
+        toolbar.addWidget(self._preview_btn)
+
+        self._preview_mode_combo = QComboBox()
+        self._preview_mode_combo.setMinimumWidth(120)
+        self._preview_mode_combo.addItem("Idle", SimulationMode.IDLE)
+        self._preview_mode_combo.addItem("Street", SimulationMode.STREET)
+        self._preview_mode_combo.addItem("Track Warmup", SimulationMode.TRACK_WARMUP)
+        self._preview_mode_combo.addItem("Track Hotlap", SimulationMode.TRACK_HOTLAP)
+        self._preview_mode_combo.addItem("Drag Launch", SimulationMode.DRAG_LAUNCH)
+        self._preview_mode_combo.setCurrentIndex(3)  # Default to hotlap
+        self._preview_mode_combo.currentIndexChanged.connect(self._on_preview_mode_changed)
+        toolbar.addWidget(self._preview_mode_combo)
 
         # Spacer
         spacer = QWidget()
@@ -419,3 +526,35 @@ class ScreenEditorWidget(QWidget):
             self._canvas._widget_items[widget_config.id].update()
 
         self.screen_changed.emit()
+
+    # Preview mode methods
+
+    def _toggle_preview(self, checked: bool) -> None:
+        """Toggle preview simulation on/off."""
+        self._preview_mode = checked
+
+        if checked:
+            # Start simulation
+            mode = self._preview_mode_combo.currentData()
+            self._simulator.set_mode(mode)
+            self._simulator.start()
+            self._preview_btn.setText("■ Stop")
+            self._hint_label.setText("Preview Mode - Live data simulation")
+            self._canvas.set_preview_mode(True)
+        else:
+            # Stop simulation
+            self._simulator.stop()
+            self._preview_btn.setText("▶ Play")
+            self._hint_label.setText("Drag widgets from palette or right-click to add")
+            self._canvas.set_preview_mode(False)
+
+    def _on_preview_mode_changed(self, index: int) -> None:
+        """Handle preview mode selection change."""
+        mode = self._preview_mode_combo.currentData()
+        if mode and self._simulator.is_running():
+            self._simulator.set_mode(mode)
+
+    def _on_simulator_data(self, data: dict) -> None:
+        """Handle simulated data from simulator."""
+        if self._preview_mode:
+            self._canvas.update_preview_data(data)

@@ -32,9 +32,10 @@ class WidgetButton(QToolButton):
         """Setup button appearance."""
         self.setText(self._widget_def.display_name)
         self.setToolTip(self._widget_def.description)
-        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
-        self.setIconSize(QSize(48, 48))
-        self.setMinimumSize(80, 70)
+        # Icon on left, text on right
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.setIconSize(QSize(32, 32))
+        self.setMinimumHeight(44)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         # Create icon as colored rectangle
@@ -48,9 +49,10 @@ class WidgetButton(QToolButton):
                 background-color: #3d3d3d;
                 border: 1px solid #555;
                 border-radius: 4px;
-                padding: 5px;
+                padding: 6px 10px;
                 color: #ddd;
-                font-size: 10px;
+                font-size: 11px;
+                text-align: left;
             }
             QToolButton:hover {
                 background-color: #4d4d4d;
@@ -63,7 +65,7 @@ class WidgetButton(QToolButton):
 
     def _create_icon(self) -> QPixmap:
         """Create a colored icon for the widget type."""
-        size = 48
+        size = 32
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)
 
@@ -72,17 +74,37 @@ class WidgetButton(QToolButton):
 
         # Color based on widget type
         colors = {
+            # Gauges
             WidgetType.RPM_GAUGE: QColor(60, 120, 60),
             WidgetType.SPEEDOMETER: QColor(60, 60, 120),
+            WidgetType.TEMP_GAUGE: QColor(120, 80, 50),
+            WidgetType.FUEL_GAUGE: QColor(100, 80, 60),
+            WidgetType.PRESSURE_GAUGE: QColor(90, 90, 60),
+            WidgetType.BOOST_GAUGE: QColor(60, 100, 120),
+            # Indicators
             WidgetType.GEAR_INDICATOR: QColor(120, 90, 60),
             WidgetType.SHIFT_LIGHTS: QColor(120, 60, 60),
-            WidgetType.TEMP_GAUGE: QColor(120, 80, 50),
-            WidgetType.G_FORCE_METER: QColor(80, 80, 120),
-            WidgetType.LAP_TIMER: QColor(80, 80, 80),
             WidgetType.STATUS_PILL: QColor(60, 100, 100),
+            WidgetType.WARNING_LIGHT: QColor(120, 50, 50),
+            WidgetType.LED_INDICATOR: QColor(50, 120, 50),
+            # Meters
+            WidgetType.G_FORCE_METER: QColor(80, 80, 120),
+            WidgetType.THROTTLE_BAR: QColor(50, 120, 50),
+            WidgetType.BRAKE_BAR: QColor(120, 50, 50),
+            WidgetType.AFR_BAR: QColor(100, 80, 100),
+            # Timers
+            WidgetType.LAP_TIMER: QColor(80, 80, 80),
+            WidgetType.DELTA_DISPLAY: QColor(100, 80, 80),
+            WidgetType.SECTOR_TIMES: QColor(80, 80, 100),
+            WidgetType.BEST_LAP: QColor(120, 60, 120),
+            # Text
             WidgetType.CUSTOM_TEXT: QColor(100, 100, 100),
-            WidgetType.FUEL_GAUGE: QColor(100, 80, 60),
             WidgetType.VARIABLE_DISPLAY: QColor(70, 90, 110),
+            WidgetType.NUMERIC_DISPLAY: QColor(80, 100, 100),
+            # Graphics
+            WidgetType.IMAGE: QColor(80, 80, 80),
+            WidgetType.RECTANGLE: QColor(70, 70, 70),
+            WidgetType.LINE: QColor(60, 60, 60),
         }
 
         color = colors.get(self._widget_def.widget_type, QColor(80, 80, 80))
@@ -97,11 +119,21 @@ class WidgetButton(QToolButton):
             # Rounded rect for indicators
             painter.drawRoundedRect(4, 4, size - 8, size - 8, 8, 8)
         elif self._widget_def.category == "Meters":
-            # Rectangle for meters
+            # Horizontal bar for meters
             painter.drawRect(4, 12, size - 8, size - 24)
         elif self._widget_def.category == "Timers":
             # Rectangle with text area
             painter.drawRoundedRect(4, 8, size - 8, size - 16, 4, 4)
+        elif self._widget_def.category == "Text":
+            # Text icon shape
+            painter.drawRoundedRect(4, 10, size - 8, size - 20, 2, 2)
+        elif self._widget_def.category == "Graphics":
+            # Diamond shape for graphics
+            from PyQt6.QtGui import QPolygon
+            from PyQt6.QtCore import QPoint
+            points = [QPoint(size // 2, 4), QPoint(size - 4, size // 2),
+                     QPoint(size // 2, size - 4), QPoint(4, size // 2)]
+            painter.drawPolygon(QPolygon(points))
         else:
             # Default square
             painter.drawRect(4, 4, size - 8, size - 8)
@@ -249,17 +281,15 @@ class WidgetPalette(QWidget):
             }
         """)
 
-        layout = QGridLayout(group)
+        # Single column layout for full-width buttons
+        layout = QVBoxLayout(group)
         layout.setContentsMargins(8, 16, 8, 8)
-        layout.setSpacing(8)
+        layout.setSpacing(4)
 
-        # Add widget buttons in grid (2 columns)
-        for i, definition in enumerate(definitions):
+        for definition in definitions:
             button = WidgetButton(definition)
             button.clicked.connect(lambda checked, d=definition: self._on_widget_clicked(d))
-            row = i // 2
-            col = i % 2
-            layout.addWidget(button, row, col)
+            layout.addWidget(button)
 
         return group
 
