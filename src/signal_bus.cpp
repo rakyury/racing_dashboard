@@ -1,32 +1,50 @@
 #include "signal_bus.h"
+#include <string.h>
 
-#include <chrono>
-
-namespace firmware {
-
-void SignalBus::set_numeric(const std::string &name, double value) {
-    numeric_signals[name] = {value, std::chrono::steady_clock::now()};
+void signal_bus_init(SignalBus *bus) {
+    if (!bus) return;
+    memset(bus, 0, sizeof(SignalBus));
+    bus->count = 0;
 }
 
-void SignalBus::set_digital(const std::string &name, bool value) {
-    digital_signals[name] = {value, std::chrono::steady_clock::now()};
+bool signal_bus_publish(SignalBus *bus, const char *name, float value,
+                       uint64_t timestamp_ms, bool is_digital) {
+    if (!bus || !name) return false;
+
+    // Find existing signal or add new
+    for (size_t i = 0; i < bus->count; i++) {
+        if (strcmp(bus->signals[i].name, name) == 0) {
+            bus->signals[i].value = value;
+            bus->signals[i].timestamp_ms = timestamp_ms;
+            bus->signals[i].is_digital = is_digital;
+            bus->signals[i].is_valid = true;
+            return true;
+        }
+    }
+
+    // Add new signal
+    if (bus->count < MAX_SIGNALS) {
+        Signal *sig = &bus->signals[bus->count++];
+        strncpy(sig->name, name, sizeof(sig->name) - 1);
+        sig->value = value;
+        sig->timestamp_ms = timestamp_ms;
+        sig->is_digital = is_digital;
+        sig->is_valid = true;
+        return true;
+    }
+
+    return false;
 }
 
-std::optional<double> SignalBus::get_numeric(const std::string &name) const {
-    auto it = numeric_signals.find(name);
-    if (it == numeric_signals.end()) return std::nullopt;
-    return it->second.value;
-}
+bool signal_bus_get(const SignalBus *bus, const char *name, float *value) {
+    if (!bus || !name || !value) return false;
 
-bool SignalBus::get_digital(const std::string &name) const {
-    auto it = digital_signals.find(name);
-    return it != digital_signals.end() && it->second.value;
-}
+    for (size_t i = 0; i < bus->count; i++) {
+        if (strcmp(bus->signals[i].name, name) == 0 && bus->signals[i].is_valid) {
+            *value = bus->signals[i].value;
+            return true;
+        }
+    }
 
-bool SignalBus::is_stale_numeric(const std::string &name, std::chrono::milliseconds max_age) const {
-    auto it = numeric_signals.find(name);
-    if (it == numeric_signals.end()) return true;
-    return (std::chrono::steady_clock::now() - it->second.timestamp) > max_age;
+    return false;
 }
-
-} // namespace firmware

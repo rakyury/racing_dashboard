@@ -2,7 +2,20 @@
   "permissions": {
     "allow": [
       "Bash(cat:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(tree:*)",
+      "Bash(pio run:*)",
+      "Bash(platformio run:*)",
+      "Bash(python -m platformio:*)",
+      "Bash(dir \"c:\\\\Projects\\\\racing_dashboard\")",
+      "Bash(dir \"C:\\\\Projects\" /B /S)",
+      "Bash(findstr:*)",
+      "Bash(dir \"C:\\\\Projects\" /B)",
+      "Bash(find \"C:\\\\Projects\\\\pmu_30\\\\configurator\\\\src\\\\ui\"\" -type f -name \"*.py \")",
+      "Bash(pip install:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(python src/main.py:*)",
+      "Bash(git add:*)"
     ]
   }
 }

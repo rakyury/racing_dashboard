@@ -1,0 +1,41 @@
+# Racing Dashboard Configurator
+# Python 3.10+ required
+
+# GUI Framework
+PyQt6>=6.6.0
+PyQt6-Qt6>=6.6.0
+PyQt6-sip>=13.6.0
+
+# Graphics and Charts
+pyqtgraph>=0.13.0
+matplotlib>=3.8.0
+
+# Serial Communication
+pyserial>=3.5
+pyserial-asyncio>=0.6
+
+# WebSocket (for WiFi communication)
+websockets>=12.0
+
+# Data Validation
+pydantic>=2.5.0
+
+# JSON Schema
+jsonschema>=4.20.0
+
+# CAN Protocol (optional, for DBC parsing)
+cantools>=39.0.0
+python-can>=4.3.0
+
+# Utilities
+pathlib2>=2.3.7;python_version<"3.4"
+
+# Development
+pytest>=7.4.0
+pytest-qt>=4.2.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+pylint>=3.0.0
+
+# Packaging
+PyInstaller>=6.0.0

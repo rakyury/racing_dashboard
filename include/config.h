@@ -121,6 +121,10 @@
 #define ENABLE_CAMERA_MANAGER 1
 #endif
 
+#ifndef ENABLE_VOICE_ALERTS
+#define ENABLE_VOICE_ALERTS 1
+#endif
+
 #define ENABLE_OTA_UPDATES 1
 #define ENABLE_WIFI_CONFIG 1
 #define ENABLE_AUTO_BRIGHTNESS 1
@@ -129,8 +133,11 @@
 // ============================================================================
 // Debug Settings
 // ============================================================================
-#ifdef DEBUG
+#ifndef DEBUG_SERIAL_BAUDRATE
 #define DEBUG_SERIAL_BAUDRATE 115200
+#endif
+
+#ifdef DEBUG
 #define DEBUG_LOG_LEVEL 3  // 0=None, 1=Error, 2=Warning, 3=Info, 4=Verbose
 #else
 #define DEBUG_LOG_LEVEL 1

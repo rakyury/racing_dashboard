@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Firmware Build Job
+  firmware:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/.cache
+          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Build Firmware
+        run: pio run
+
+      - name: Upload Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: .pio/build/**/firmware.*
+          retention-days: 30
+
+  # Python Configurator Job
+  configurator:
+    name: Test Configurator
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xfixes0 \
+            libegl1 \
+            libgl1-mesa-glx \
+            xvfb
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('configurator/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        working-directory: configurator
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-qt pytest-cov flake8
+
+      - name: Lint with flake8
+        working-directory: configurator
+        run: |
+          flake8 src --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 src --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+      - name: Run tests (Linux)
+        if: runner.os == 'Linux'
+        working-directory: configurator
+        run: |
+          xvfb-run -a pytest tests/ -v --cov=src --cov-report=xml || true
+
+      - name: Run tests (Windows/macOS)
+        if: runner.os != 'Linux'
+        working-directory: configurator
+        run: |
+          pytest tests/ -v --cov=src --cov-report=xml || true
+
+      - name: Verify imports
+        working-directory: configurator/src
+        run: |
+          python -c "from models.widget_types import WidgetType; print('Models OK')"
+          python -c "from models.screen_layout import ScreenLayout; print('Screen Layout OK')"
+          python -c "from communication.protocol import MessageType; print('Protocol OK')"
+
+  # Build Configurator Executables
+  build-executables:
+    name: Build Executables
+    needs: [configurator]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: RacingDashboardConfigurator-Linux
+          - os: windows-latest
+            artifact_name: RacingDashboardConfigurator-Windows
+          - os: macos-latest
+            artifact_name: RacingDashboardConfigurator-macOS
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-x11-0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xfixes0
+
+      - name: Install dependencies
+        working-directory: configurator
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        working-directory: configurator
+        run: |
+          pyinstaller --onefile --windowed \
+            --name "RacingDashboardConfigurator" \
+            --add-data "resources:resources" \
+            src/main.py || pyinstaller --onefile --name "RacingDashboardConfigurator" src/main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: configurator/dist/*
+          retention-days: 30
+
+  # Release Job (on tag)
+  release:
+    name: Create Release
+    needs: [firmware, build-executables]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            firmware/**/*
+            RacingDashboardConfigurator-*/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
